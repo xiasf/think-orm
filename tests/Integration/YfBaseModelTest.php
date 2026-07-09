@@ -847,7 +847,247 @@ class YfBaseModelTest extends IntegrationTestCase
         $this->assertSame(123.45, $arr['amount']);
     }
 
-    // —— 26. 入门 demo 完整流程（端到端） ——
+    // —— 26. 补：useWith / search_or / upds / withScope / get_ExtendField ——
+
+    public function testUseWithChainsEagerLoad()
+    {
+        // useWith 是 BaseModel 提供的链式 with 简写
+        $sp = $this->seedSmartpark('园区A');
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'channels' => 'sms']);
+
+        $m = new Notice();
+        // 应返回 $this（可链式）
+        $ret = $m->useWith('smartparkInfo');
+        $this->assertSame($m, $ret);
+
+        // select 后关联被预加载
+        $rows = $m->getQuery()->where('id', '>', 0)->select();
+        $this->assertCount(1, $rows);
+        $this->assertSame('园区A', $rows[0]->smartpark_info->name);
+    }
+
+    public function testUseWithAcceptsArray()
+    {
+        $sp = $this->seedSmartpark('园B');
+        Notice::create(['smartpark_id' => $sp, 'name' => 'x', 'channels' => 'sms']);
+
+        $m = new Notice();
+        $m->useWith(['smartparkInfo']);
+        $rows = $m->getQuery()->where('id', '>', 0)->select();
+        $this->assertSame('园B', $rows[0]->smartpark_info->name);
+    }
+
+    public function testSearchOrMixesAndOrConditions()
+    {
+        $sp = $this->seedSmartpark();
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'status' => 0, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'b', 'status' => 1, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'c', 'status' => 2, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'd', 'status' => 3, 'channels' => 'sms']);
+
+        // where: smartpark_id=$sp AND (status=0 OR status=1)
+        $m = new Notice();
+        $count = 0;
+        $rows = $m->search_or(
+            ['smartpark_id' => $sp],          // AND
+            ['status' => ['in', [0, 1]]],     // OR group
+            'id asc',
+            1,
+            100,
+            $count
+        );
+        $this->assertSame(2, $count);
+        $this->assertCount(2, $rows);
+        $names = array_column($rows, 'name');
+        sort($names);
+        $this->assertSame(['a', 'b'], $names);
+    }
+
+    public function testSearchOrWithEmptyConditionsReturnsAll()
+    {
+        $sp = $this->seedSmartpark();
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'b', 'channels' => 'sms']);
+
+        // 传空：search_or 会过滤掉空条件，留下无 where 的查询
+        $m = new Notice();
+        $count = 0;
+        $rows = $m->search_or([], [], 'id desc', 1, 100, $count);
+        $this->assertSame(2, $count);
+        $this->assertCount(2, $rows);
+    }
+
+    public function testUpdsBatchUpdate()
+    {
+        $sp = $this->seedSmartpark();
+        $n1 = Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'channels' => 'sms', 'status' => 0]);
+        $n2 = Notice::create(['smartpark_id' => $sp, 'name' => 'b', 'channels' => 'sms', 'status' => 0]);
+
+        $m = new Notice();
+        // upds 把多条记录的 status 一起改成 1
+        $firstRow = $m->upds([
+            ['id' => $n1->id, 'status' => 1],
+            ['id' => $n2->id, 'status' => 1],
+        ]);
+        // 返回第一条更新后的 data
+        $this->assertSame(1, (int) $firstRow['status']);
+        $this->assertSame('1', (string) Db::name('di_notice')->where('id', $n1->id)->value('status'));
+        $this->assertSame('1', (string) Db::name('di_notice')->where('id', $n2->id)->value('status'));
+    }
+
+    public function testUpdsEmptyReturnsFalse()
+    {
+        $m = new Notice();
+        $res = $m->upds([]);
+        $this->assertFalse($res);
+        $this->assertNotEmpty($m->getError());
+    }
+
+    public function testWithScopeInvokesScopeMethods()
+    {
+        // 用匿名子类提供 scope 方法
+        $sp = $this->seedSmartpark();
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'status' => 0, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'b', 'status' => 1, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'c', 'status' => 1, 'channels' => 'sms']);
+
+        $m = new class extends Notice {
+            // withScope 调用的方法名（不是 TP 标准 scopeXxx，而是 yf 风格的直接方法）
+            public function onlyActive()
+            {
+                $this->getQuery()->where('status', 1);
+            }
+            public function get_Scope()
+            {
+                return ['onlyActive'];
+            }
+        };
+
+        $m->withScope();   // 默认从 get_Scope() 取
+        $rows = $m->getQuery()->where('smartpark_id', $sp)->select();
+        $this->assertCount(2, $rows);
+    }
+
+    public function testWithScopeExplicitArg()
+    {
+        $sp = $this->seedSmartpark();
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'status' => 1, 'channels' => 'sms']);
+
+        $m = new class extends Notice {
+            public function applyRange()
+            {
+                $this->getQuery()->where('status', 1);
+            }
+        };
+
+        $m->withScope('applyRange');
+        $rows = $m->getQuery()->where('smartpark_id', $sp)->select();
+        $this->assertCount(1, $rows);
+    }
+
+    public function testWithScopeEmptyIsNoOp()
+    {
+        // 无 scope 参数 + get_Scope() 返回空 → 直接返回 $this，不报错
+        $m = new Notice();
+        $ret = $m->withScope();
+        $this->assertSame($m, $ret);
+    }
+
+    public function testGetExtendFieldAddsCustomFieldsToFieldWhere()
+    {
+        // 通过匿名子类提供 ExtendField：让 fieldWhere 接受虚拟字段 custom_status
+        $sp = $this->seedSmartpark();
+        Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'status' => 1, 'channels' => 'sms']);
+        Notice::create(['smartpark_id' => $sp, 'name' => 'b', 'status' => 2, 'channels' => 'sms']);
+
+        $m = new class extends Notice {
+            public function get_ExtendField()
+            {
+                return ['custom_status'];   // 不在表里但允许作为 status 的别名
+            }
+        };
+
+        // custom_status 不是真实字段，但因 ExtendField 注入，fieldWhere 不会跳过它
+        // 不过 where('custom_status', '=', ...) 仍会因 DB 字段不存在而报错——
+        // 所以这里改测：fieldWhere 处理 ExtendField 时确实把它放进 where 链路
+        // 用 fetchSql 检查 SQL 包含 custom_status
+        $m->fieldWhere(['custom_status' => 5]);
+        $sql = $m->getQuery()->fetchSql(true)->where('smartpark_id', $sp)->select();
+        $this->assertStringContainsString('custom_status', $sql);
+    }
+
+    public function testResultSetConvertsDecimalToFloat()
+    {
+        // resultSet 是 toArray 调用的：decimal 字段应转 float
+        $m = new Notice();
+        $item = ['id' => 1, 'amount' => '12.50', 'name' => 'x'];
+        $res = $m->resultSet($item);
+        $this->assertIsFloat($res['amount']);
+        $this->assertSame(12.50, $res['amount']);
+        // 非 decimal 字段不变
+        $this->assertSame('x', $res['name']);
+    }
+
+    public function testResultListSetNullReturnsNull()
+    {
+        // 空结果直接返回（不调 collection）
+        $m = new Notice();
+        $this->assertNull($m->resultListSet(null));
+    }
+
+    public function testResultListSetConvertsCollectionToArray()
+    {
+        $sp = $this->seedSmartpark();
+        $row = Notice::create(['smartpark_id' => $sp, 'name' => 'a', 'channels' => 'sms']);
+        $m = new Notice();
+        // 传入 Model 实例的 collection
+        $res = $m->resultListSet([$row]);
+        $this->assertIsArray($res);
+        $this->assertCount(1, $res);
+    }
+
+    public function testInfoByBasicWhere()
+    {
+        // infoBy 直接 where 数组形式（不传 lock）
+        $sp = $this->seedSmartpark();
+        $n = Notice::create(['smartpark_id' => $sp, 'name' => 'direct', 'channels' => 'sms']);
+        $m = new Notice();
+        $row = $m->infoBy(['id' => $n->id]);
+        $this->assertIsArray($row);
+        $this->assertSame('direct', $row['name']);
+    }
+
+    public function testInfoByEmptyReturnsNull()
+    {
+        $m = new Notice();
+        $row = $m->infoBy(['id' => 999999]);
+        $this->assertNull($row);
+    }
+
+    public function testValidatorNameExplicitOverride()
+    {
+        // 显式设置 $validatorName（protected）应优先生效
+        // 用反射直接赋值，模拟子类在 protected $validatorName = 'xxx'; 声明的效果
+        $m = new Notice();
+        $prop = new \ReflectionProperty(BaseModel::class, 'validatorName');
+        $prop->setAccessible(true);
+        $prop->setValue($m, 'custom/Path');
+        $this->assertSame('custom/Path', $m->validatorName());
+    }
+
+    public function testValidateDataConvertsBadRuleToException()
+    {
+        // 故意传一条错误规则（拼错的 integer），用 set_error_handler 转 ValidateException
+        $this->expectException(\think\exception\ValidateException::class);
+        try {
+            $m = new Notice();
+            $m->validate(['name' => ['integeregt:0']])->save(['name' => 'x']);
+        } catch (\Throwable $e) {
+            throw $e;
+        }
+    }
+
+    // —— 27. 入门 demo 完整流程（端到端） ——
 
     public function testEndToEndWorkflowMatchesYfUsage()
     {

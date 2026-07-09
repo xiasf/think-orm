@@ -457,7 +457,7 @@ php example/run.php
 
 `example/run.php` 端到端演示：`model()` 解析 → 创建 → 字段格式化（JSON/数组/decimal→float/append）→ 关联预加载 → readonly → 验证器场景 → 聚合。**包含 13 个 section**：di 模块（Notice/Smartpark）+ parkinglot 模块（Car/CarOwner/Parkinglot/Smartpark/User 的 BModel + 条件关联 + bind + 多层嵌套 + pivot 过滤 + readonly）。所有 SQL 通过 PSR-3 logger 打到 stdout。
 
-**测试覆盖**（385 tests / 737 assertions）：
+**测试覆盖**（407 tests / 772 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
@@ -482,7 +482,7 @@ php example/run.php
 | JSON 字段 | `JsonFieldTest` |
 | 分页 | `PaginatorTest` |
 | 闭包 where | `ClosureWhereTest` |
-| **yf 风格 BaseModel** | `YfBaseModelTest`（59 个测试：initialize/curr_model、自动时间戳、JSON、读写器、append、关联、readonly、CRUD、search 分页、聚合、upSert、trait spd/sca/listIndexBy/fieldWhere/withModel/rollbackQuery、PSR-3 SQL 日志、validate helper、端到端） |
+| **yf 风格 BaseModel** | `YfBaseModelTest`（77 个测试：validatorName、useWith、自动时间戳、JSON、读写器、append、关联、readonly、CRUD add/adds/upd/upds/updBy/updAttr/del/delBy、info/infoBy、lists/listBy/listByIds/listPageBy、search/search_or 分页、聚合 countBy/maxBy/minBy/avgBy/sumBy/valueBy/inc/dec、upSert、resultSet/resultListSet、trait spd/sca/listIndexBy/listIndexByIds/fieldWhere/withModel/withScope/get_ExtendField/rollbackQuery、validatorName 显式覆盖、validateData 错误转异常、PSR-3 SQL 日志、validate/model helper、端到端） |
 | **yf parkinglot 模块** | `ParkinglotIntegrationTest`（20 个测试：BModel 双 readonly + 条件关联 + helper，$insert 自动字段 + 修改器，belongsTo+bind，hasMany，belongsToMany+pivot 过滤，多层嵌套 with，search_or，7 个 BaseValidator 自定义规则，validateData 错误转异常） |
 
 ---

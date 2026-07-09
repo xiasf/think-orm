@@ -152,4 +152,72 @@ class ConfigTest extends UnitTestCase
             'database' => ['params' => [], 'socket' => '', 'read_master' => false],
         ]);
     }
+
+    /**
+     * boot() 第二次调用：配置应合并
+     *  - 未注入 PSR-3 logger 时，log.file 会被更新（这是单例模式正常行为）
+     *  - **注入过 PSR-3 logger 后**，log.file 会被静默忽略 —— 这才是用户反馈的真实坑
+     *    GitHub #1：测试中切 log 配置失败
+     */
+    public function testBootRepeatAfterPsr3LoggerIgnoresLogFile()
+    {
+        $tmpA = tempnam(sys_get_temp_dir(), 'logA') . '.log';
+        $tmpB = tempnam(sys_get_temp_dir(), 'logB') . '.log';
+
+        // 1) 首次 boot：log.file = tmpA，未注入 PSR-3 logger → 文件日志写入
+        Orm::boot(['log' => ['file' => $tmpA]]);
+        \think\Log::record('first', 'sql');
+        $this->assertFileExists($tmpA);
+
+        // 2) 注入 PSR-3 logger
+        $fakeLogger = new class {
+            public $logs = [];
+            public function log($level, $msg, array $ctx = []) { $this->logs[] = "[$level] $msg"; }
+        };
+        \think\Log::setLogger($fakeLogger);
+
+        // 3) 第二次 boot：log.file = tmpB
+        // —— Log::getLogger() !== null，boot 内部 if 跳过 setLogFile
+        // 即使没跳过，record 也会走 PSR-3 logger 然后 return，文件永远不写
+        Orm::boot(['log' => ['file' => $tmpB]]);
+        \think\Log::record('second', 'sql');
+
+        $this->assertFileDoesNotExist($tmpB, '注入 PSR-3 logger 后，文件日志永远不写');
+        $this->assertCount(1, $fakeLogger->logs, '应走 PSR-3 logger');
+
+        // 4) refreshLog 调用 —— 注入 PSR-3 logger 后，refreshLog 设置路径但 record 仍走 logger
+        Orm::refreshLog($tmpB);
+        \think\Log::record('third', 'sql');
+        $this->assertFileDoesNotExist($tmpB, 'PSR-3 logger 已注入时，refreshLog 也无法让文件被写');
+        $this->assertCount(2, $fakeLogger->logs, '仍走 PSR-3 logger');
+
+        // 5) 想"切回"文件日志：必须先 setLogger(null) 移除 PSR-3 logger
+        \think\Log::setLogger(null);
+        \think\Log::record('fourth', 'sql');
+        $this->assertFileExists($tmpB, 'setLogger(null) 后 refreshLog 设的路径才生效');
+
+        // 清理
+        Orm::refreshLog(null);
+        @unlink($tmpA);
+        @unlink($tmpB);
+    }
+
+    /**
+     * refreshLog(null) 关闭文件日志
+     */
+    public function testRefreshLogNullDisablesFileLogging()
+    {
+        $tmp = tempnam(sys_get_temp_dir(), 'logC') . '.log';
+        Orm::refreshLog($tmp);
+        \think\Log::record('x', 'sql');
+        $this->assertFileExists($tmp);
+
+        Orm::refreshLog(null);
+        $size = filesize($tmp);
+        \think\Log::record('y', 'sql');
+        clearstatcache();
+        $this->assertSame($size, filesize($tmp), '关闭后不应再写入');
+
+        @unlink($tmp);
+    }
 }

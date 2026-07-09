@@ -4,15 +4,29 @@
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-07-09
+
+响应早期用户反馈完善文档与 API：
+
 ### Added
 
-- **守护进程支持**：`example/daemon/BaseWorker.php` 抽象基类（initDb / heartbeat / checkDbBreak / reconnectDb 完整生命周期）+ `QueueWorker.php` 队列消费具体实现 + `run_daemon.php` 启动脚本
-- 守护进程下持久化策略文档：cli 关 `ATTR_PERSISTENT`、开 `break_reconnect`；phpfpm 反之
-- `DaemonWorkerTest`（15 个测试）：探活、断线关键词识别、双缓存清空（Db::$instance + Model::$links）、CONNECTION_ID 变化验证、cli vs phpfpm 配置对比、限次迭代生命周期、模拟断线自动重连
+- **`Orm::refreshLog($file)` API**：运行时切换 SQL 日志文件路径，绕过 boot() 单例不刷新的限制
+- **README 第 12 / 13 条差异说明**：
+  - `Orm::boot()` 单例语义详解（重复调用仅合并 Config，logger / Connection / Model::$links 不会刷新）
+  - `Log::record` "按优先级"行为说明（注入 PSR-3 logger 后文件日志永远不写）
+  - 6 类运行时切换场景的正确做法表
+  - `force()` 不是物理删除（消除 Laravel 肌肉记忆混淆），物理删除走 `destroy($ids, true)` / `delete(true)`
+- **API 速查表**新增"物理删除"行
 
-### Changed
+### Tests
 
-- 测试总数 411 → 426 / 断言 801 → 828
+- `ConfigTest::testBootRepeatAfterPsr3LoggerIgnoresLogFile` —— 覆盖用户反馈的"测试中切 log 配置失败"场景
+- `ConfigTest::testRefreshLogNullDisablesFileLogging` —— refreshLog(null) 关闭文件日志
+- `SoftDeleteTest::testDeleteWithForceTruePhysicallyRemoves` —— `delete(true)` 物理删除
+- `SoftDeleteTest::testDestroyWithForceTruePhysicallyRemoves` —— `destroy($ids, true)` 批量物理删除
+- `SoftDeleteTest::testForceChainBeforeDeleteIsStillSoftDelete` —— **关键**：`force()->delete()` 仍是软删（消除 Laravel 误解）
+
+测试总数：426 → 431 / 断言 828 → 841
 
 ## [1.0.0] - 2026-07-09
 

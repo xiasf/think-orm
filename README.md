@@ -565,6 +565,7 @@ php example/run_daemon.php
 | 插入 | `User::create($data)` / `(new User)->save($data)` |
 | 更新 | `User::update($data)` / `$u->save()` |
 | 删除 | `User::destroy($ids)` / `$u->delete()` |
+| 物理删除（含软删模型） | `User::destroy($ids, true)` / `$u->delete(true)` —— 注意 **不是** `force()->delete()`（见下方差异说明） |
 | 自增自减 | `User::where('id',1)->inc('hits')->update()` |
 | 关联 | `User::with('posts,profile')->select()` |
 | 分页 | `User::where(...)->paginate(15)` |
@@ -609,7 +610,7 @@ php example/run_daemon.php                   # 生产模式：无限循环（Ctr
 
 `example/run_daemon.php` 演示**守护进程下安全使用 ORM** 的完整模式：队列消费 worker，每 2 秒轮询一批任务、单条事务处理、失败回滚、定期心跳、断线重连。详见下方 [守护进程使用](#守护进程使用) 章节。
 
-**测试覆盖**（426 tests / 828 assertions）：
+**测试覆盖**（431 tests / 841 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
@@ -657,6 +658,33 @@ php example/run_daemon.php                   # 生产模式：无限循环（Ctr
    从 yf 迁移过来的代码需把 `use traits\model\SoftDelete;` 改为 `use think\traits\model\SoftDelete;`。
 10. **`Query::setInc / setDec` 实时写入**：移除了 `$lazyTime` 延迟累积更新分支（依赖 Cache 的 inc/dec），inc/dec 永远实时写入 DB。`$lazyTime` 参数保留以维持签名兼容但被忽略。
 11. **不依赖缓存**：`think\Cache` 桩默认所有操作返回 false / null / 空。`Query::cache()` API 保留（每次仍走 DB），PSR-16 缓存可选注入但不推荐。
+12. **⚠️ `Orm::boot()` 只能初始化一次**：第二次调用仅合并 `Config`，**不会刷新**这些已建立的单例：
+    - `Log::$logger`（已注入的 PSR-3 logger）
+    - `Db::$instance`（已建立的 PDO 连接）
+    - `Model::$links`（按类名缓存的 Query 实例）
+
+    **`Log::record` 的"按优先级"行为**（重要）：
+    - **未注入 PSR-3 logger** → 走文件日志（如已通过 `log.file` 启用）
+    - **已注入 PSR-3 logger** → 直接调用 `logger->log()` 后 `return`，**文件日志永远不写**（即使 `log.file` 也配置了）
+
+    想运行时切换：
+    | 场景 | 正确做法 |
+    |---|---|
+    | 切日志文件路径（未注入 PSR-3 logger） | `Orm::refreshLog($newPath)` 或直接 `Log::setLogFile($newPath)` |
+    | 切 PSR-3 logger 实例 | `Log::setLogger($newLogger)` |
+    | 从 PSR-3 logger 切回文件日志 | `Log::setLogger(null)` + `Log::setLogFile($path)` |
+    | 多套 DB 配置 | 用 `Db::connect($configKey)` 显式连接（不要重复 boot 切库） |
+    | 守护进程断线重连 | 见 [守护进程使用](#守护进程使用) 章节 |
+    | 测试场景完全重置 | `Orm::reset()` + `Db::clear()` + 反射清空 `Model::$links` |
+13. **⚠️ `force()` 是 update 标志，不是物理删除**（**Laravel 用户最容易踩的坑**）：
+    - `$model->force(true)->save()` —— **跳过字段比较，强制 update 写入**（TP 5.0.24 原语义）
+    - `$model->force()->delete()` —— **仍是软删**，force 标志对 delete 无影响
+    - 物理删除（含软删模型）的真实 API：
+        ```php
+        User::destroy($ids, true);      // 第二参数 $force=true 走 SoftDelete::destroy 第二参
+        $user->delete(true);            // SoftDelete::delete($force=true) 跳过软删字段
+        User::onlyTrashed()->select();  // 反例：查软删记录用 onlyTrashed()
+        ```
 
 ---
 

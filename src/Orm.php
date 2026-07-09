@@ -88,6 +88,22 @@ class Orm
     }
 
     /**
+     * 刷新 SQL 日志配置 —— 运行时切换日志文件路径
+     *
+     * boot() 只在首次调用时设置文件日志，重复 boot 不会覆盖已注入的 logger。
+     * 想运行时改日志文件路径，调用本方法。
+     *
+     * 想换 PSR-3 logger 实例，请直接 \think\Log::setLogger($new)。
+     *
+     * @param string|null $file 日志文件路径（绝对），传 null 关闭文件日志
+     * @return void
+     */
+    public static function refreshLog(?string $file)
+    {
+        Log::setLogFile($file);
+    }
+
+    /**
      * 重置 boot 状态（仅测试用）
      */
     public static function reset()

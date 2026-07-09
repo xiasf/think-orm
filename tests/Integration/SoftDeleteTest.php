@@ -74,4 +74,50 @@ class SoftDeleteTest extends IntegrationTestCase
         $trashed->restore();
         $this->assertNotNull(SoftUser::get($id));
     }
+
+    /**
+     * 物理删除（force=true）应真删，不留 delete_time
+     * 覆盖 README 差异章节 #13 的物理删除 API 用法
+     */
+    public function testDeleteWithForceTruePhysicallyRemoves()
+    {
+        $id = $this->seedUser(['name' => 'phys']);
+        $user = SoftUser::get($id);
+        $user->delete(true);
+
+        // 物理记录应不存在
+        $row = Db::name('users')->where('id', $id)->find();
+        $this->assertNull($row);
+    }
+
+    /**
+     * destroy($ids, true) 批量物理删除
+     */
+    public function testDestroyWithForceTruePhysicallyRemoves()
+    {
+        $id1 = $this->seedUser(['name' => 'a']);
+        $id2 = $this->seedUser(['name' => 'b']);
+        SoftUser::destroy([$id1, $id2], true);
+
+        $this->assertNull(Db::name('users')->where('id', $id1)->find());
+        $this->assertNull(Db::name('users')->where('id', $id2)->find());
+    }
+
+    /**
+     * ⚠️ force()->delete() 仍是软删（消除 Laravel 肌肉记忆混淆）
+     * force 标志只影响 update，对 delete 无影响
+     */
+    public function testForceChainBeforeDeleteIsStillSoftDelete()
+    {
+        $id = $this->seedUser(['name' => 'x']);
+        $user = SoftUser::get($id);
+
+        // Laravel 风格的写法 —— 在本包里仍是软删！
+        $user->force(true)->delete();
+
+        // 物理记录仍在
+        $row = Db::name('users')->where('id', $id)->find();
+        $this->assertNotNull($row, 'force()->delete() 不应物理删除');
+        $this->assertNotEmpty($row['delete_time'], '应是软删，delete_time 有值');
+    }
 }

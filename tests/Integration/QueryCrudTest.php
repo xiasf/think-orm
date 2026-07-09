@@ -149,4 +149,38 @@ class QueryCrudTest extends IntegrationTestCase
         $this->assertStringContainsString('SELECT', $sql);
         $this->assertStringContainsString('age', $sql);
     }
+
+    public function testFindOrFailReturnsRowWhenFound()
+    {
+        $id = $this->seedUser(['name' => 'present']);
+        $row = Db::name('users')->where('id', $id)->findOrFail();
+        $this->assertIsArray($row);
+        $this->assertSame('present', $row['name']);
+    }
+
+    public function testFindOrFailThrowsWhenMissing()
+    {
+        $this->expectException(\think\db\exception\DataNotFoundException::class);
+        Db::name('users')->where('id', 999999)->findOrFail();
+    }
+
+    public function testSelectOrFailThrowsWhenEmpty()
+    {
+        $this->expectException(\think\db\exception\DataNotFoundException::class);
+        Db::name('users')->where('id', '>', 999999)->selectOrFail();
+    }
+
+    public function testSelectOrFailReturnsRowsWhenFound()
+    {
+        $this->seedUser(['name' => 'a']);
+        $rows = Db::name('users')->where('id', '>', 0)->selectOrFail();
+        $this->assertCount(1, $rows);
+    }
+
+    public function testFailExceptionFlagChains()
+    {
+        // failException(true) 后 find() 也应抛异常
+        $this->expectException(\think\db\exception\DataNotFoundException::class);
+        Db::name('users')->failException(true)->where('id', 999999)->find();
+    }
 }

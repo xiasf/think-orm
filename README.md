@@ -1,5 +1,16 @@
 # think-orm
 
+[![Packagist Version](https://img.shields.io/packagist/v/xiasf/think-orm.svg?style=flat-square&logo=packagist&label=Packagist)](https://packagist.org/packages/xiasf/think-orm)
+[![PHP Version](https://img.shields.io/packagist/php-v/xiasf/think-orm.svg?style=flat-square&logo=php)](https://packagist.org/packages/xiasf/think-orm)
+[![License](https://img.shields.io/packagist/l/xiasf/think-orm.svg?style=flat-square&label=License)](./LICENSE)
+[![Total Downloads](https://img.shields.io/packagist/dt/xiasf/think-orm.svg?style=flat-square&logo=packagist&label=Downloads)](https://packagist.org/packages/xiasf/think-orm/stats)
+[![Monthly Downloads](https://img.shields.io/packagist/dm/xiasf/think-orm.svg?style=flat-square&label=Monthly)](https://packagist.org/packages/xiasf/think-orm/stats)
+[![Packagist Stars](https://img.shields.io/packagist/stars/xiasf/think-orm.svg?style=flat-square&logo=packagist&label=Stars)](https://packagist.org/packages/xiasf/think-orm)
+[![GitHub Stars](https://img.shields.io/github/stars/xiasf/think-orm.svg?style=flat-square&logo=github&label=GitHub)](https://github.com/xiasf/think-orm)
+[![GitHub Issues](https://img.shields.io/github/issues/xiasf/think-orm.svg?style=flat-square&logo=github&label=Issues)](https://github.com/xiasf/think-orm/issues)
+[![Last Commit](https://img.shields.io/github/last-commit/xiasf/think-orm.svg?style=flat-square&logo=github&label=Last%20Commit)](https://github.com/xiasf/think-orm/commits)
+[![CI](https://img.shields.io/badge/CI-planned-orange.svg?style=flat-square&logo=githubactions)](https://github.com/xiasf/think-orm)
+
 ThinkPHP 5.0.24 ORM 的独立 composer 包移植。**保留原 `think\` 命名空间**，零改动拷贝核心源码，配套 8 个桩文件替换框架依赖。
 
 官方 [`topthink/think-orm`](https://github.com/top-think/think-orm) 从 TP **5.1+** 抽出，API 与 5.0.24 不兼容，因此必须直接 fork 5.0.24 实际源码。

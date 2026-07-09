@@ -4,6 +4,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- **守护进程支持**：`example/daemon/BaseWorker.php` 抽象基类（initDb / heartbeat / checkDbBreak / reconnectDb 完整生命周期）+ `QueueWorker.php` 队列消费具体实现 + `run_daemon.php` 启动脚本
+- 守护进程下持久化策略文档：cli 关 `ATTR_PERSISTENT`、开 `break_reconnect`；phpfpm 反之
+- `DaemonWorkerTest`（15 个测试）：探活、断线关键词识别、双缓存清空（Db::$instance + Model::$links）、CONNECTION_ID 变化验证、cli vs phpfpm 配置对比、限次迭代生命周期、模拟断线自动重连
+
+### Changed
+
+- 测试总数 411 → 426 / 断言 801 → 828
+
 ## [1.0.0] - 2026-07-09
 
 首个稳定发布。从 ThinkPHP 5.0.24 抽离的独立 ORM 包，保留 `think\` 命名空间，可在非 ThinkPHP 项目中复用 TP 5.0 风格 ORM。

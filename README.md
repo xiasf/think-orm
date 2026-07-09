@@ -401,6 +401,140 @@ define('RUNTIME_PATH', '/var/log/myapp/');
 
 ---
 
+## 守护进程使用
+
+**适用场景**：workerman / swoole / while(true) loop / cron 等 CLI 常驻进程。
+
+**核心问题**：常驻进程持有 PDO 连接数小时，MySQL `wait_timeout`（默认 8h，DBA 可能调到 1h 甚至更短）会主动切断空闲连接，下次 query 时炸 `MySQL server has gone away`。
+
+### 关键配置：phpfpm vs cli
+
+| 配置项 | phpfpm / mod_php | cli 守护进程 |
+|---|---|---|
+| `params[PDO::ATTR_PERSISTENT]` | **`true`**（多请求间复用 PDO，减握手） | **不设 / `[]`**（守护进程已常驻，persistent 反而阻止 break_reconnect 关闭僵尸连接） |
+| `break_reconnect` | `false`（请求短，靠重建连接即可） | **`true`**（必须开，遇到 `gone away` 关键词自动 close → 重连） |
+| `read_master` | 按需 | **`true`**（守护进程有"写后立即读"场景的几乎必然） |
+
+#### phpfpm 启动
+
+```php
+\ThinkOrm\Orm::boot([
+    'database' => [
+        // ...
+        'params'          => [\PDO::ATTR_PERSISTENT => true],   // ★ 开
+        'break_reconnect' => false,                              // ★ 不依赖
+        'read_master'     => true,                               // 业务有写后立即读就开
+    ],
+]);
+```
+
+#### cli 守护进程启动
+
+```php
+\ThinkOrm\Orm::boot([
+    'database' => [
+        // ...
+        'params'          => [],                                 // ★ 关（不能开 persistent）
+        'break_reconnect' => true,                               // ★ 必须开
+        'read_master'     => true,
+    ],
+]);
+```
+
+### 为什么 cli 不能开 `ATTR_PERSISTENT`？
+
+1. **守护进程本来就常驻**，PDO 已天然复用，persistent 不带来额外收益
+2. **persistent PDO 由 PHP 内部缓存**，`Connection::close()` 只是 `$this->linkID = null`，**不真关闭底层 PDO**。break_reconnect 失效，僵尸连接永远占着
+3. **persistent 连接跨脚本共享**，多个 worker 进程（如 workerman 多子进程）共用同一个 PHP 持久化池容易撞 transaction 状态污染
+
+### 完整守护进程 demo
+
+参考 `example/daemon/BaseWorker.php` —— 单文件、零外部依赖、不依赖 pcntl（Windows 也能跑）。三个核心机制：
+
+#### 1. `initDb()`：启动时预连接
+
+```php
+protected function initDb(): void
+{
+    Db::query('SELECT 1');              // 强制建立连接（避免 lazy 引发首次业务请求即失败）
+    $this->lastHeartbeat = microtime(true);
+}
+```
+
+#### 2. `heartbeat()`：定期探活
+
+```php
+while (!$this->stopRequested) {
+    try {
+        if (microtime(true) - $this->lastHeartbeat >= $this->heartbeatInterval) {
+            $this->heartbeat();         // SELECT 1，失败抛 PDOException
+            $this->lastHeartbeat = microtime(true);
+        }
+        $this->onTick();                // 业务
+    } catch (\Throwable $e) {
+        if ($this->checkDbBreak($e)) {  // 关键词识别
+            $this->reconnectDb();
+        }
+    }
+}
+```
+
+#### 3. `reconnectDb()`：清两道缓存
+
+**踩过的坑**：`break_reconnect = true` 时 `Connection::close()` 只清自己内部的 `linkID`，但 **`Model::$links` 是另一个静态缓存**，按 model 类名缓存了 Query 实例（持有 Connection）。Connection 重建后，Model 仍会拿到老的僵尸 Connection。
+
+```php
+protected function reconnectDb(): void
+{
+    // 1) 清全局连接池
+    Db::clear();
+
+    // 2) 清 Model 类级别 Query 缓存（protected，反射）
+    $prop = new \ReflectionProperty(Model::class, 'links');
+    $prop->setAccessible(true);
+    $prop->setValue(null, []);
+
+    // 3) 强制重建一次连接（失败立即抛）
+    Db::query('SELECT 1');
+}
+```
+
+### checkDbBreak 关键词列表
+
+参考 `Connection::isBreak()`：
+
+```php
+$keywords = [
+    'server has gone away', 'no connection to the server',
+    'Lost connection', 'is dead or not enabled',
+    'Error while sending', 'decryption failed or bad record mac',
+    'server closed the connection unexpectedly',
+    'SSL connection has been closed unexpectedly',
+    'Error writing data to the connection',
+    'Resource deadlock avoided', 'failed with errno',
+    'Broken pipe',
+];
+```
+
+业务异常（如 `validate failed`）不应触发重连 —— `checkDbBreak` 用 stripos 匹配关键词，无匹配返回 false。
+
+### 完整启动示例
+
+```bash
+# demo 模式（限 20 个 tick 后退出）
+php example/run_daemon.php --max-tick=20
+
+# 生产模式（无限循环；pcntl 可用时 SIGTERM/SIGINT 优雅退出）
+php example/run_daemon.php
+```
+
+参考文件：
+- `example/daemon/BaseWorker.php` —— 抽象基类（initDb / heartbeat / checkDbBreak / reconnectDb / 信号处理）
+- `example/daemon/QueueWorker.php` —— 队列消费具体实现（单条事务、失败回滚、自动建表 + seed）
+- `example/run_daemon.php` —— 启动脚本（cli 配置演示）
+
+---
+
 ## 注入（可选）
 
 ```php
@@ -465,7 +599,17 @@ php example/run.php
 
 `example/run.php` 端到端演示：`model()` 解析 → 创建 → 字段格式化（JSON/数组/decimal→float/append）→ 关联预加载 → readonly → 验证器场景 → 聚合。**包含 13 个 section**：di 模块（Notice/Smartpark）+ parkinglot 模块（Car/CarOwner/Parkinglot/Smartpark/User 的 BModel + 条件关联 + bind + 多层嵌套 + pivot 过滤 + readonly）。所有 SQL 通过 PSR-3 logger 打到 stdout。
 
-**测试覆盖**（411 tests / 801 assertions）：
+### 跑守护进程示例
+
+```bash
+# 复用 example 数据库
+php example/run_daemon.php --max-tick=20    # demo 模式：跑 20 个 tick 后退出
+php example/run_daemon.php                   # 生产模式：无限循环（Ctrl+C 退出）
+```
+
+`example/run_daemon.php` 演示**守护进程下安全使用 ORM** 的完整模式：队列消费 worker，每 2 秒轮询一批任务、单条事务处理、失败回滚、定期心跳、断线重连。详见下方 [守护进程使用](#守护进程使用) 章节。
+
+**测试覆盖**（426 tests / 828 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
@@ -492,6 +636,7 @@ php example/run.php
 | 闭包 where | `ClosureWhereTest` |
 | **yf 风格 BaseModel** | `YfBaseModelTest`（77 个测试：validatorName、useWith、自动时间戳、JSON、读写器、append、关联、readonly、CRUD add/adds/upd/upds/updBy/updAttr/del/delBy、info/infoBy、lists/listBy/listByIds/listPageBy、search/search_or 分页、聚合 countBy/maxBy/minBy/avgBy/sumBy/valueBy/inc/dec、upSert、resultSet/resultListSet、trait spd/sca/listIndexBy/listIndexByIds/fieldWhere/withModel/withScope/get_ExtendField/rollbackQuery、validatorName 显式覆盖、validateData 错误转异常、PSR-3 SQL 日志、validate/model helper、端到端） |
 | **yf parkinglot 模块** | `ParkinglotIntegrationTest`（20 个测试：BModel 双 readonly + 条件关联 + helper，$insert 自动字段 + 修改器，belongsTo+bind，hasMany，belongsToMany+pivot 过滤，多层嵌套 with，search_or，7 个 BaseValidator 自定义规则，validateData 错误转异常） |
+| **守护进程** | `DaemonWorkerTest`（15 个测试：initDb/heartbeat 探活、checkDbBreak 关键词识别 gone away/lost connection/broken pipe、业务异常不触发重连、reconnectDb 双缓存清空 Db::$instance+Model::$links、重建 PDO（CONNECTION_ID 变化）、cli 默认关 persistent / phpfpm 通过 params 开 persistent、限次迭代生命周期、心跳触发、模拟断线自动重连恢复） |
 
 ---
 

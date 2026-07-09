@@ -1,0 +1,34 @@
+# 默认所有文本文件统一换行符（Windows / macOS / Linux 协作时避免 LF/CFLF 混合）
+* text=auto
+
+# PHP 源码显式 LF
+*.php text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.sql text eol=lf
+*.xml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 二进制
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
+*.tar binary
+
+# 这些目录仅用于本仓库开发，不进入 Packagist 分发包
+# （GitHub 生成 tag zip 时会遵守 export-ignore）
+/tests                  export-ignore
+/example                export-ignore
+/.github                export-ignore
+/runtime                export-ignore
+/coverage               export-ignore
+/build                  export-ignore
+/phpunit.xml            export-ignore
+/tests/phpunit.xml      export-ignore
+/.phpunit.result.cache  export-ignore
+/.gitattributes         export-ignore
+/.gitignore             export-ignore

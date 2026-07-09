@@ -63,5 +63,18 @@
     "config": {
         "sort-packages": true,
         "optimize-autoloader": true
+    },
+    "archive": {
+        "exclude": [
+            "/tests/",
+            "/example/",
+            "/.github/",
+            "/runtime/",
+            "/coverage/",
+            "/build/",
+            ".phpunit.*",
+            "/phpunit.xml",
+            "/tests/phpunit.xml"
+        ]
     }
 }

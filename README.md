@@ -457,7 +457,7 @@ php example/run.php
 
 `example/run.php` 端到端演示：`model()` 解析 → 创建 → 字段格式化（JSON/数组/decimal→float/append）→ 关联预加载 → readonly → 验证器场景 → 聚合。**包含 13 个 section**：di 模块（Notice/Smartpark）+ parkinglot 模块（Car/CarOwner/Parkinglot/Smartpark/User 的 BModel + 条件关联 + bind + 多层嵌套 + pivot 过滤 + readonly）。所有 SQL 通过 PSR-3 logger 打到 stdout。
 
-**测试覆盖**（363 tests / 681 assertions）：
+**测试覆盖**（385 tests / 737 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
@@ -469,6 +469,7 @@ php example/run.php
 | CRUD | `QueryCrudTest`、`InsertAllTest` |
 | 事务 | `TransactionTest`（commit/rollback/嵌套） |
 | Query Builder | `QueryBuilderTest`（where/join/group/having/order/limit/page/inc/dec） |
+| Query 高级 API | `AdvancedQueryTest`（whereRaw/whereOrRaw/whereExists/whereNotExists/whereExp/whereTime/whereNotNull/whereNotBetween/whereNotLike/useSoftDelete/fetchSql/getPk/getTableFields） |
 | 子查询 | `SubqueryTest` |
 | 分批 | `ChunkCursorTest` |
 | Model CRUD | `ModelCrudTest`、`ModelAccessorMutatorTest`、`ModelAutoTimestampTest` |

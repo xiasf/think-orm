@@ -18,7 +18,7 @@ use ThinkOrm\Tests\IntegrationTestCase;
  * @group integration
  *
  * 验证 yf 风格 BaseModel 完整移植：
- *   - 初始化 initialize 设置 curr_model / class
+ *   - validatorName() 从命名空间自动推断（app\<module>\model\..\Xxx → "<module>/Xxx"）
  *   - CRUD 封装：add / adds / upd / upds / updBy / updAttr / del / delBy / info / infoBy /
  *              lists / listBy / listByIds / listPageBy / search
  *   - 聚合：countBy / maxBy / minBy / avgBy / sumBy / valueBy / inc / dec
@@ -71,24 +71,19 @@ class YfBaseModelTest extends IntegrationTestCase
         return Db::name('di_smartpark')->insertGetId(['name' => $name, 'number' => 'SP001']);
     }
 
-    // —— 1. initialize / curr_model / class ——
+    // —— 1. validatorName() 从命名空间推断 ——
 
-    public function testInitializeSetsCurrModelAndClass()
+    public function testValidatorNameDerivedFromNamespace()
     {
         $n = new Notice();
-        $this->assertSame('di/Notice', $n->curr_model);
-        // $class 是 protected 属性，通过反射验证
-        $ref = new \ReflectionProperty(Notice::class, 'class');
-        $ref->setAccessible(true);
-        $this->assertSame(Notice::class, $ref->getValue($n));
+        $this->assertSame('di/Notice', $n->validatorName());
     }
 
-    public function testBModelInitializeSetsModelProperty()
+    public function testValidatorNameForSubdirModel()
     {
+        // app\di\model\v1\Smartpark → "di/Smartpark"（中间层 model/v1 被忽略）
         $b = new Smartpark();
-        $ref = new \ReflectionProperty(Smartpark::class, 'model');
-        $ref->setAccessible(true);
-        $this->assertSame('di/Smartpark', $ref->getValue($b));
+        $this->assertSame('di/Smartpark', $b->validatorName());
     }
 
     // —— 2. 自动写入时间戳（int 类型，字段名 add_time） ——

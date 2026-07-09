@@ -12,9 +12,4 @@ class Smartpark extends BModel
 {
     protected $table = 'pt_smartpark';
     protected $autoWriteTimestamp = false;
-
-    protected function initialize($model = '', $class = '')
-    {
-        parent::initialize('', __CLASS__);
-    }
 }

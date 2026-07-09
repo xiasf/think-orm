@@ -8,9 +8,4 @@ class Smartpark extends BModel
 {
     protected $table = 'di_smartpark';
     protected $autoWriteTimestamp = false;
-
-    protected function initialize($model = '', $class = '')
-    {
-        parent::initialize('', __CLASS__);
-    }
 }

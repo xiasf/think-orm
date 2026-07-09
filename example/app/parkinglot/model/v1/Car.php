@@ -28,13 +28,7 @@ class Car extends BModel
      * 新增时自动写入这两个字段（配合下面的 setIsXxxAttr 修改器）
      */
     protected $insert = ['is_temp_number', 'is_new_energy'];
-
-    protected function initialize($model = '', $class = '')
-    {
-        parent::initialize('', __CLASS__);
-    }
-
-    /**
+/**
      * 多层嵌套 with：fixcar_list 下面还嵌套了 smartpark_info / parkinglot_info / 等
      * 这是 yf 真实业务里查一辆车全量信息的标准用法
      */

@@ -19,8 +19,8 @@ trait Model
     public function spd($data)
     {
         if (!$data) return false;
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . "." . $this->scene)
+        $m = new static;
+        $res = $m->validate($this->validatorName() . "." . $this->scene)
             ->allowField(true)->isUpdate(true)->save($data);
         if ($res === false) {
             $this->error = $m->getError();
@@ -35,8 +35,8 @@ trait Model
     public function sca($data)
     {
         if (!$data) return false;
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . "." . $this->scene)
+        $m = new static;
+        $res = $m->validate($this->validatorName() . "." . $this->scene)
             ->allowField(true)->isUpdate(false)->save($data);
         if ($res === false) {
             $this->error = $m->getError();
@@ -50,7 +50,7 @@ trait Model
      */
     public function listIndexBy($where = null, $index = 'id', $field = '', $limit = 1000, $order = 'id desc')
     {
-        $m = new $this->class();
+        $m = new static();
         $q = $m->where($where)->limit($limit)->order($order);
         $res = $field ? $q->column($field, $index) : $q->column('*', $index);
         return $res ? collection($res)->toArray() : null;

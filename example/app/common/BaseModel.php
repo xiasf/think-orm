@@ -1,12 +1,23 @@
 <?php
 // +----------------------------------------------------------------------
-// | 兼容 yf 项目的 BaseModel（精简移植版）
-// | - 保留：initialize / search / search_or / info / listBy / add / upd / del /
-// |        countBy / maxBy / minBy / avgBy / sumBy / valueBy / inc / dec /
-// |        upSert / resultSet（decimal → float）/ resultListSet
-// | - validateData 包了 set_error_handler：规则写错（如 require|integeregt:0）时
-// |   会抛 ValidateException 而不是静默失败，便于排查（移植自 yf 实战经验）
-// | - 去除：upload（依赖 think\Image、request()->file()）
+// | app\common\BaseModel —— yf 风格 BaseModel 的干净移植
+// |
+// | 设计要点（与原 yf 版本的差异）：
+// |   1. 不再需要 initialize($model, $class) 手工解析命名空间
+// |      - PHP 原生 static::class 直接给出 FQCN
+// |      - 验证器路径（"<module>/<Name>"）由 validatorName() 从命名空间推断
+// |   2. 所有"new 一个新的自己"用 new static()（PHP 晚静态绑定）
+// |      - 子类（Car / Notice 等）自动得到正确实例，无需重写 initialize
+// |   3. 关联关系里直接 use 目标类、用 ModelClass::class
+// |      - 比写 model('xxx/xxx')->class 更直接、IDE 可跳转、PHPStan 可静态分析
+// |
+// | 保留：search / search_or / info / infoBy / lists / listBy / listByIds /
+// |      listPageBy / add / adds / upd / upds / updBy / updAttr / del / delBy /
+// |      countBy / maxBy / minBy / avgBy / sumBy / valueBy / inc / dec /
+// |      upSert / resultSet（decimal → float）/ resultListSet
+// |
+// | validateData 包了 set_error_handler：规则写错（如 require|integeregt:0）时
+// | 会抛 ValidateException 而不是静默通过（移植自 yf 实战经验）。
 // +----------------------------------------------------------------------
 
 namespace app\common;
@@ -21,52 +32,69 @@ class BaseModel extends Model
 {
     use TModel;
 
-    /** @var string 当前模块/模型标识，用于 validate('module/scene') */
-    public $curr_model = null;
-
-    /** @var string 默认验证场景，子类可重写（必须 public，否则 __set 会写入 data） */
+    /**
+     * 当前验证场景（add / edit / 子类自定义）
+     * 必须 public：TP 5.0 的 Model::__set 会拦截对 protected/private 属性的写入
+     * @var string
+     */
     public $scene = '';
 
-    /** @var string|null 最近一次操作的错误信息（必须 public，否则 __get 抛异常） */
+    /**
+     * 最近一次操作的错误信息
+     * 必须 public：同上
+     * @var string|null
+     */
     public $error = null;
 
     /**
-     * 子类 initialize 第一行应调用 parent::initialize('', __CLASS__)
+     * 验证器路径覆盖
+     * 默认为 null，表示由 validatorName() 从命名空间推断。
+     * 子类如需指向与命名空间约定不同的验证器，重写本属性即可。
      *
-     * @param string $model 模块名（默认空）
-     * @param string $class 完整类名（默认空）
+     * 例：
+     *   protected $validatorName = 'parkinglot/Car';   // 显式指定
+     *   protected $validatorName = null;               // 默认：从命名空间推断
+     *
+     * @var string|null
      */
-    protected function initialize($model = '', $class = '')
-    {
-        parent::initialize();
-        if ($class) {
-            $arr = explode("\\", $class);
-            // yf 风格：[app/<module>/.../<Name>]，curr_model = "<module>/<Name>"
-            // app\di\model\v1\Notice → $arr[1]='di', $arr[4]='Notice' → 'di/Notice'
-            if (isset($arr[1]) && isset($arr[4])) {
-                $this->curr_model = $arr[1] . "/" . $arr[4];
-            } else {
-                $this->curr_model = end($arr);
-            }
-            $this->class = $class;
-        }
-    }
+    protected $validatorName = null;
 
     /**
-     * 链式预加载关联（yf 风格）
+     * 取验证器路径（用于 validate('module/Name.scene') 解析）
+     *
+     * 推断规则（默认）：
+     *   命名空间 app\<module>\model\...\Xxx  →  "<module>/Xxx"
+     *   例：app\parkinglot\model\v1\Car  →  "parkinglot/Car"
+     *       app\di\model\v1\Notice       →  "di/Notice"
+     *
+     * @return string|null
      */
+    public function validatorName()
+    {
+        if ($this->validatorName !== null) {
+            return $this->validatorName;
+        }
+        // static::class —— PHP 原生晚静态绑定，给出真实子类 FQCN
+        $parts = explode('\\', static::class);
+        if (isset($parts[0], $parts[1]) && $parts[0] === 'app') {
+            return $parts[1] . '/' . end($parts);
+        }
+        return end($parts) ?: null;
+    }
+
+    // —— 链式预加载 ——
+
     public function useWith($name)
     {
         $this->getQuery()->with($name);
         return $this;
     }
 
-    /**
-     * 简易列表查询
-     */
+    // —— 列表查询 ——
+
     public function lists($where = [], $field = '', $order = '', $limit = null)
     {
-        $m = new $this->class();
+        $m = new static();
         if ($where) $m->where($where);
         if ($field) $m->field($field);
         if ($order) $m->order($order);
@@ -79,8 +107,7 @@ class BaseModel extends Model
      */
     public function search($where = null, $order = 'id desc', $page = 1, $page_size = 100, &$count = 0)
     {
-        $page = (int) $page;
-        if ($page == 0) $page = 1;
+        $page = max(1, (int) $page);
         $page_size = (int) $page_size;
         if ($page_size <= 0) $page_size = 100;
 
@@ -88,7 +115,7 @@ class BaseModel extends Model
 
         $where = array_filter((array) $where, function ($v) { return $v !== ''; });
 
-        $m = new $this->class();
+        $m = new static();
         $m->where($where);
         if ($limit !== null) $m->limit($limit, $page_size);
         $m->order($order);
@@ -105,19 +132,10 @@ class BaseModel extends Model
 
     /**
      * AND + OR 混合搜索：where AND (where_or 之间 OR)
-     *
-     * @param array $where    AND 条件
-     * @param array $where_or OR 条件（任一满足）
-     * @param string $order
-     * @param int $page       -1 表示不分页
-     * @param int $page_size
-     * @param int $count      输出：总记录数
-     * @return array
      */
     public function search_or($where = null, $where_or = null, $order = 'id desc', $page = 1, $page_size = 1000, &$count = 0)
     {
-        $page = (int) $page;
-        if ($page == 0) $page = 1;
+        $page = max(1, (int) $page);
         $page_size = (int) $page_size;
         if ($page_size <= 0) $page_size = 100;
 
@@ -126,7 +144,7 @@ class BaseModel extends Model
         $where    = array_filter((array) $where,    function ($v) { return $v !== ''; });
         $where_or = array_filter((array) $where_or, function ($v) { return $v !== ''; });
 
-        $m = new $this->class();
+        $m = new static();
         $m->whereOr(function ($query) use ($where_or) {
             $query->whereOr($where_or);
         })->where($where);
@@ -144,20 +162,16 @@ class BaseModel extends Model
         return $this->resultListSet($res);
     }
 
-    /**
-     * 按主键取单条
-     */
+    // —— 单条查询 ——
+
     public function info($id, $field = '', $order = '', $is_lock = null)
     {
         return $this->infoBy(['id' => $id], $field, $order, $is_lock);
     }
 
-    /**
-     * 按条件取单条（返回数组）
-     */
     public function infoBy($where, $field = '', $order = '', $is_lock = null)
     {
-        $m = new $this->class;
+        $m = new static;
         $query = $m->getQuery();
         if ($field) $query->field($field);
         if (!is_null($is_lock)) $query->lock($is_lock);
@@ -188,17 +202,13 @@ class BaseModel extends Model
         return $item;
     }
 
-    /**
-     * 列表结果处理
-     */
     public function resultListSet($result)
     {
         return $result ? collection($result)->toArray() : $result;
     }
 
-    /**
-     * 按主键集合取列表
-     */
+    // —— 批量查询 ——
+
     public function listByIds($ids, $field = '', $limit = 1000, $order = 'id desc')
     {
         return $this->listBy(['id' => ['in', $ids]], $field, $limit, $order);
@@ -206,7 +216,7 @@ class BaseModel extends Model
 
     public function listBy($where = null, $field = '', $limit = 1000, $order = 'id desc')
     {
-        $m = new $this->class();
+        $m = new static();
         $q = $m->where($where)->limit($limit)->order($order);
         if ($field) $q->field($field);
         return $this->resultListSet($q->select());
@@ -216,15 +226,14 @@ class BaseModel extends Model
     {
         $page = max(1, (int) $page);
         $offset = $page_size * ($page - 1);
-        $m = new $this->class();
+        $m = new static();
         $q = $m->where($where)->limit($offset, $page_size)->order($order);
         if ($field) $q->field($field);
         return $this->resultListSet($q->select());
     }
 
-    /**
-     * 新增（yf add）
-     */
+    // —— 增删改 ——
+
     public function add($data, $method = '')
     {
         if (!$data) {
@@ -237,8 +246,9 @@ class BaseModel extends Model
             unset($data['id']);
         }
 
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . ".add")->allowField(true)->isUpdate(false)->save($data);
+        $m = new static;
+        $res = $m->validate($this->validatorName() . ".add")
+            ->allowField(true)->isUpdate(false)->save($data);
         if ($res === false) {
             $this->error = $m->getError();
             return false;
@@ -254,8 +264,9 @@ class BaseModel extends Model
             $this->error = '没有新增数据';
             return false;
         }
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . ".add")->allowField(true)->isUpdate(false)->saveAll($list, false);
+        $m = new static;
+        $res = $m->validate($this->validatorName() . ".add")
+            ->allowField(true)->isUpdate(false)->saveAll($list, false);
         return collection($res)->toArray();
     }
 
@@ -268,8 +279,9 @@ class BaseModel extends Model
         if ($method) {
             $data = is_string($method) ? $this->$method($data) : $method($data);
         }
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . ".edit")->allowField(true)->isUpdate(true)->save($data);
+        $m = new static;
+        $res = $m->validate($this->validatorName() . ".edit")
+            ->allowField(true)->isUpdate(true)->save($data);
         if ($res === false) {
             $this->error = $m->getError();
             return false;
@@ -283,8 +295,9 @@ class BaseModel extends Model
             $this->error = '没有更新数据';
             return false;
         }
-        $m = new $this->class;
-        $res = $m->validate($this->curr_model . ".edit")->allowField(true)->isUpdate(true)->saveAll($datas, true);
+        $m = new static;
+        $res = $m->validate($this->validatorName() . ".edit")
+            ->allowField(true)->isUpdate(true)->saveAll($datas, true);
         return $res[0]->data;
     }
 
@@ -296,7 +309,7 @@ class BaseModel extends Model
 
     public function updBy($data, $where)
     {
-        $m = new $this->class;
+        $m = new static;
         $res = $m->allowField(true)->isUpdate(true)->save($data, $where);
         if ($res === false) {
             $this->error = $m->getError();
@@ -307,59 +320,54 @@ class BaseModel extends Model
 
     public function del($ids)
     {
-        $m = new $this->class;
-        return $m::destroy($ids);
+        return static::destroy($ids);
     }
 
     public function delBy($where)
     {
-        $m = new $this->class;
-        return $m::destroy($where);
+        return static::destroy($where);
     }
+
+    // —— 聚合 ——
 
     public function countBy($where = '', $field = 'id')
     {
-        $m = new $this->class;
-        return $where ? $m::where($where)->count($field) : $m::count($field);
+        return $where ? static::where($where)->count($field) : static::count($field);
     }
 
     public function maxBy($where, $field)
     {
-        $m = new $this->class;
-        return $where ? $m::where($where)->max($field) : $m::max($field);
+        return $where ? static::where($where)->max($field) : static::max($field);
     }
 
     public function minBy($where, $field)
     {
-        $m = new $this->class;
-        return $where ? $m::where($where)->min($field) : $m::min($field);
+        return $where ? static::where($where)->min($field) : static::min($field);
     }
 
     public function avgBy($where, $field)
     {
-        $m = new $this->class;
-        return $where ? $m::where($where)->avg($field) : $m::avg($field);
+        return $where ? static::where($where)->avg($field) : static::avg($field);
     }
 
     public function sumBy($where, $field)
     {
-        $m = new $this->class;
-        return $where ? $m::where($where)->sum($field) : $m::sum($field);
+        return $where ? static::where($where)->sum($field) : static::sum($field);
     }
 
     public function inc($where, $field_name, $field_val = 1)
     {
-        return (new $this->class)->where($where)->setInc($field_name, $field_val);
+        return (new static)->where($where)->setInc($field_name, $field_val);
     }
 
     public function dec($where, $field_name, $field_val)
     {
-        return (new $this->class)->where($where)->setDec($field_name, $field_val);
+        return (new static)->where($where)->setDec($field_name, $field_val);
     }
 
     public function valueBy($where = null, $field, $order = 'id desc')
     {
-        $m = new $this->class();
+        $m = new static();
         return $m->where($where)->limit(1)->order($order)->value($field);
     }
 
@@ -373,7 +381,7 @@ class BaseModel extends Model
         foreach ($fields as $field) {
             $frow[] = "$field=VALUES($field)";
         }
-        $sql = (new $this->class)->fetchSql(true)->insertAll($arr);
+        $sql = (new static)->fetchSql(true)->insertAll($arr);
         $sql .= " ON DUPLICATE KEY UPDATE " . implode(',', $frow);
         return Db::execute($sql);
     }

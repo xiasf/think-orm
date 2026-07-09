@@ -176,14 +176,27 @@ validate('User')->scene('login')->check(['email' => 'a@b.com']);
 
 如果 `model('iot/NotExists')` 在 iot 模块下找不到，Loader 会自动尝试 `app\common\model\NotExists`。这是 yf 的多模块共享模型机制。
 
-### 实际例子（yf 项目）
+### 实际例子（yf 项目风格）
 
 ```php
-// yf parkinglot/Car.php 内部代码
-return $this->belongsTo(model('smartpark/smartpark')->class, 'smartpark_id', 'id');
-//                       ↑ 字符串 'smartpark' 是模块名（小写）
-//                                       ↑ 字符串 'smartpark' 是类名（小写，会被转成 Smartpark）
+namespace app\parkinglot\model\v1;
+
+use app\parkinglot\model\BModel;
+use app\parkinglot\model\v1\Smartpark;
+
+class Car extends BModel
+{
+    // 关联：直接用类常量 Smartpark::class —— 比 model('xxx/xxx')->class 更直接，
+    // IDE 可跳转、PHPStan 可静态分析。
+    public function smartparkInfo()
+    {
+        return $this->belongsTo(Smartpark::class, 'smartpark_id', 'id')
+            ->where(['status' => 1, 'is_del' => 0]);
+    }
+}
 ```
+
+> 历史写法 `model('smartpark/smartpark')->class` 也能用（`model()` 返回实例，`->class` 取其 FQCN），但**不推荐**——多一次实例化、绕一道字符串解析、IDE 无法跟踪。新代码统一用 `TargetClass::class`。
 
 文件结构：
 ```

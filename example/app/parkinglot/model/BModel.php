@@ -2,32 +2,24 @@
 // +----------------------------------------------------------------------
 // | parkinglot 模块基类（移植自 yf application/parkinglot/model/BModel.php）
 // | - 双 readonly 字段：smartpark_id / parkinglot_id
-// | - 3 个默认关联：smartparkInfo / parkinglotInfo / passagewayInfo
+// | - 3 个默认关联：smartparkInfo / parkinglotInfo
 // | - 2 个 helper：useWithSp() / useWithPt()
-// | - 3 个兜底访问器：缺字段时返回 null 而非抛 InvalidArgumentException
+// | - 2 个兜底访问器：缺字段时返回 null 而非抛 InvalidArgumentException
+// |
+// | 不再需要 initialize() override —— 验证器路径由 BaseModel::validatorName()
+// | 从命名空间自动推断（app\parkinglot\model\..\Xxx → "parkinglot/Xxx"）
 // +----------------------------------------------------------------------
 
 namespace app\parkinglot\model;
 
 use app\common\BaseModel;
+use app\parkinglot\model\v1\Smartpark;
+use app\parkinglot\model\v1\Parkinglot;
 
 class BModel extends BaseModel
 {
-    /** @var string|null 当前模块标识，trait 的 spd/sca 用 */
-    public $model = null;
-
     // 这两个只读字段不能改，尤其是切换园区场景容易导致数据错乱（移植自 yf）
     protected $readonly = ['smartpark_id', 'parkinglot_id'];
-
-    protected function initialize($model = '', $class = '')
-    {
-        $arr = explode("\\", $class);
-        // yf 风格：$arr[1]=模块名，$arr[4]=类名 → 例如 'parkinglot/Car'
-        if (isset($arr[1]) && isset($arr[4])) {
-            $this->model = $arr[1] . "/" . $arr[4];
-        }
-        parent::initialize($arr[4] ?? '', $class);
-    }
 
     /**
      * 便捷 helper：预加载 smartpark_info 关联
@@ -64,7 +56,7 @@ class BModel extends BaseModel
         if (!array_key_exists('smartpark_id', $this->data)) {
             $this->data['smartpark_id'] = null;
         }
-        return $this->belongsTo(\app\parkinglot\model\v1\Smartpark::class, 'smartpark_id', 'id')
+        return $this->belongsTo(Smartpark::class, 'smartpark_id', 'id')
             ->field('id,name,number,desp,detail_address')
             ->where(['status' => 1, 'is_del' => 0]);
     }
@@ -88,6 +80,6 @@ class BModel extends BaseModel
         if (!array_key_exists('parkinglot_id', $this->data)) {
             $this->data['parkinglot_id'] = null;
         }
-        return $this->belongsTo(\app\parkinglot\model\v1\Parkinglot::class, 'parkinglot_id', 'id');
+        return $this->belongsTo(Parkinglot::class, 'parkinglot_id', 'id');
     }
 }

@@ -15,9 +15,4 @@ class Parkinglot extends BModel
     protected $createTime = 'add_time';
     protected $updateTime = null;
     protected $dateFormat = false;
-
-    protected function initialize($model = '', $class = '')
-    {
-        parent::initialize('', __CLASS__);
-    }
 }

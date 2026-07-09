@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="bootstrap.php"
+         colors="true"
+         convertErrorsToExceptions="true"
+         convertNoticesToExceptions="true"
+         convertWarningsToExceptions="true"
+         failOnRisky="false"
+         failOnWarning="false"
+         cacheResult="false">
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>Unit</directory>
+        </testsuite>
+        <testsuite name="Integration">
+            <directory>Integration</directory>
+        </testsuite>
+    </testsuites>
+
+    <filter>
+        <whitelist processUncoveredFilesFromWhitelist="true">
+            <directory suffix=".php">../src</directory>
+            <exclude>
+                <directory suffix=".php">../src/Example</directory>
+                <directory suffix=".php">../src/exception</directory>
+                <directory suffix=".php">../src/db/exception</directory>
+                <file>../src/Orm.php</file>
+                <file>../src/helper.php</file>
+            </exclude>
+        </whitelist>
+    </filter>
+
+    <php>
+        <!-- 测试 MySQL 库连接参数；可用环境变量覆盖 -->
+        <env name="TORM_DB_HOST" value="127.0.0.1"/>
+        <env name="TORM_DB_PORT" value="3306"/>
+        <env name="TORM_DB_NAME" value="think_orm_test"/>
+        <env name="TORM_DB_USER" value="root"/>
+        <env name="TORM_DB_PASS" value="123456"/>
+        <env name="TORM_DB_CHARSET" value="utf8mb4"/>
+        <env name="TORM_DB_PREFIX" value=""/>
+    </php>
+</phpunit>

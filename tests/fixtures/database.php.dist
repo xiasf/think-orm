@@ -1,0 +1,19 @@
+<?php
+// think-orm 测试 DB 配置模板
+// 拷贝为 database.php 后修改或在 CI 中用环境变量覆盖
+
+return [
+    'type'            => 'mysql',
+    'hostname'        => getenv('TORM_DB_HOST')   ?: '127.0.0.1',
+    'hostport'        => getenv('TORM_DB_PORT')   ?: '3306',
+    'database'        => getenv('TORM_DB_NAME')   ?: 'think_orm_test',
+    'username'        => getenv('TORM_DB_USER')   ?: 'root',
+    'password'        => getenv('TORM_DB_PASS')   ?: 'root',
+    'charset'         => getenv('TORM_DB_CHARSET') ?: 'utf8mb4',
+    'prefix'          => getenv('TORM_DB_PREFIX') ?: '',
+    'debug'           => false,
+    'fields_strict'   => false,
+    'resultset_type'  => 'array',
+    'auto_timestamp'  => false,
+    'datetime_format' => 'Y-m-d H:i:s',
+];

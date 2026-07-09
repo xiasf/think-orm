@@ -128,11 +128,18 @@ class Orm
                 'dsn'             => '',
                 'charset'         => 'utf8',
                 'prefix'          => '',
+                // PDO 构造参数（合并到内置 $this->params 之上）
+                // 例：['params' => [PDO::ATTR_PERSISTENT => true]] 开启持久连接
+                'params'          => [],
+                // Unix socket（仅 mysql；非空时优先于 hostname/hostport）
+                'socket'          => '',
                 'debug'           => false,
                 'deploy'          => 0,
                 'rw_separate'     => false,
                 'master_num'      => 1,
                 'slave_no'        => '',
+                // 写后强制读主库（分布式部署时，业务侧有过"写完立刻读不到"的场景）
+                'read_master'     => false,
                 'fields_strict'   => true,
                 'resultset_type'  => 'array',
                 'auto_timestamp'  => false,

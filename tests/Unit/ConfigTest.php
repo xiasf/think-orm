@@ -96,4 +96,60 @@ class ConfigTest extends UnitTestCase
         // 这里只验证 method 存在可调用
         $this->assertTrue(method_exists(Config::class, 'parse'));
     }
+
+    /**
+     * yf/TP 5.0.24 标准 database.php 全配置项都应在 Orm::boot 后存在
+     * 这是把 yf 项目切到本包时最常踩的雷——某项缺了用户传不进来
+     */
+    public function testDatabaseDefaultsIncludeAllYfKeys()
+    {
+        $db = Config::get('database');
+        $this->assertIsArray($db);
+
+        // 与 yf application/database.php 一一对应
+        $requiredKeys = [
+            'type', 'hostname', 'database', 'username', 'password',
+            'hostport', 'dsn', 'params', 'charset', 'prefix',
+            'debug', 'deploy', 'rw_separate', 'master_num', 'slave_no',
+            'read_master', 'fields_strict', 'resultset_type',
+            'auto_timestamp', 'datetime_format', 'sql_explain',
+        ];
+        foreach ($requiredKeys as $key) {
+            $this->assertArrayHasKey($key, $db, "缺少 yf 标准配置项: database.{$key}");
+        }
+    }
+
+    public function testDatabaseParamsDefaultIsEmptyArray()
+    {
+        // params 是 PDO 构造参数，必须默认 [] 而不是 null（Connection 用 + 合并）
+        $this->assertIsArray(Config::get('database.params'));
+        $this->assertSame([], Config::get('database.params'));
+    }
+
+    public function testDatabaseSocketAndReadMasterExist()
+    {
+        // 这两项原本运行时支持但 defaults 缺失，现已补齐
+        $this->assertSame('', Config::get('database.socket'));
+        $this->assertFalse(Config::get('database.read_master'));
+    }
+
+    public function testOrmBootPreservesUserPassedParams()
+    {
+        // 用户传的 params 不能被 defaults 覆盖
+        Orm::boot([
+            'database' => [
+                'params' => [\PDO::ATTR_PERSISTENT => true],
+                'socket' => '/tmp/mysql.sock',
+                'read_master' => true,
+            ],
+        ]);
+        $this->assertTrue(Config::get('database.params')[\PDO::ATTR_PERSISTENT] ?? false);
+        $this->assertSame('/tmp/mysql.sock', Config::get('database.socket'));
+        $this->assertTrue(Config::get('database.read_master'));
+
+        // 还原（避免污染后续测试）
+        Orm::boot([
+            'database' => ['params' => [], 'socket' => '', 'read_master' => false],
+        ]);
+    }
 }

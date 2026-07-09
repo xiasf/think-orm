@@ -361,19 +361,25 @@ protected function validateData($data, $rule = null, $batch = null)
         'username'        => 'root',
         'password'        => '',
         'dsn'             => '',               // 显式 dsn 优先
+        'socket'          => '',               // Unix socket（非空时优先于 hostname/hostport）
         'charset'         => 'utf8mb4',
         'prefix'          => '',
+        'params'          => [],               // PDO 构造参数，例：[PDO::ATTR_PERSISTENT => true] 开持久连接
         'debug'           => false,
-        'deploy'          => 0,                // 0=单库，1=分布式
-        'rw_separate'     => false,
-        'master_num'      => 1,
-        'slave_no'        => '',
+        'deploy'          => 0,                // 0=集中式（单库），1=分布式（主从）
+        'rw_separate'     => false,            // 分布式部署时是否读写分离
+        'master_num'      => 1,                // 主服务器数量（rw_separate=true 时有效）
+        'slave_no'        => '',               // 指定从服务器序号（不指定则随机）
+        'read_master'     => false,            // 写后强制读主库（业务有"写完立即读"场景时启用）
         'fields_strict'   => true,             // 严格字段检查
         'resultset_type'  => 'array',          // 或 'collection'
         'auto_timestamp'  => false,            // 全局自动时间戳
         'datetime_format' => 'Y-m-d H:i:s',
+        'sql_explain'     => false,            // EXPLAIN 调试（debug=true 时生效）
         'use_schema'      => false,            // 读取 RUNTIME_PATH/schema 字段缓存
+        'builder'         => '',               // 自定义 Builder 类
         'query'           => '\\think\\db\\Query',   // 自定义 Query 类
+        'break_reconnect' => false,            // 断线重连
     ],
     'paginate' => [
         'type'      => 'bootstrap',
@@ -382,6 +388,8 @@ protected function validateData($data, $rule = null, $batch = null)
     ],
 ]);
 ```
+
+> **与 yf 项目 `database.php` 对齐**：上面列出的配置项与 TP 5.0.24 / yf 项目惯例完全一致。从 yf 切到本包时，把 yf 的 `application/database.php` 返回数组直接传给 `Orm::boot(['database' => $yfConfig])` 即可。
 
 ### 自定义常量
 
@@ -457,7 +465,7 @@ php example/run.php
 
 `example/run.php` 端到端演示：`model()` 解析 → 创建 → 字段格式化（JSON/数组/decimal→float/append）→ 关联预加载 → readonly → 验证器场景 → 聚合。**包含 13 个 section**：di 模块（Notice/Smartpark）+ parkinglot 模块（Car/CarOwner/Parkinglot/Smartpark/User 的 BModel + 条件关联 + bind + 多层嵌套 + pivot 过滤 + readonly）。所有 SQL 通过 PSR-3 logger 打到 stdout。
 
-**测试覆盖**（407 tests / 772 assertions）：
+**测试覆盖**（411 tests / 801 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|

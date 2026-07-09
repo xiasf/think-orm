@@ -43,6 +43,10 @@ abstract class IntegrationTestCase extends \PHPUnit\Framework\TestCase
         // 清理 Query 内字段结构缓存（避免使用上次测试残留的 schema 信息）
         Loader::clearInstance();
         Db::clear();
+        // 清空 Model 内的 Query 池（unit 测试可能创建了带空 password 的 Connection）
+        $prop = new \ReflectionProperty(\think\Model::class, 'links');
+        $prop->setAccessible(true);
+        $prop->setValue(null, []);
 
         foreach (self::$tablesToTruncate as $tbl) {
             Db::execute("TRUNCATE TABLE `{$tbl}`");

@@ -457,12 +457,13 @@ php example/run.php
 
 `example/run.php` 端到端演示：`model()` 解析 → 创建 → 字段格式化（JSON/数组/decimal→float/append）→ 关联预加载 → readonly → 验证器场景 → 聚合。**包含 13 个 section**：di 模块（Notice/Smartpark）+ parkinglot 模块（Car/CarOwner/Parkinglot/Smartpark/User 的 BModel + 条件关联 + bind + 多层嵌套 + pivot 过滤 + readonly）。所有 SQL 通过 PSR-3 logger 打到 stdout。
 
-**测试覆盖**（305 tests / 587 assertions）：
+**测试覆盖**（363 tests / 681 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
 | 桩文件 | `SupportStubTest` |
 | 配置 | `ConfigTest` |
+| Loader 类 | `LoaderTest`（parseName / parseClass / addNamespaceAlias / addClassMap / model() / validate() 解析、缓存、common fallback、FQCN passthrough、异常） |
 | 验证规则 | `ValidateRulesTest`（全部内置规则 + 中文消息） |
 | 集合 | `CollectionTest` |
 | CRUD | `QueryCrudTest`、`InsertAllTest` |
@@ -472,6 +473,7 @@ php example/run.php
 | 分批 | `ChunkCursorTest` |
 | Model CRUD | `ModelCrudTest`、`ModelAccessorMutatorTest`、`ModelAutoTimestampTest` |
 | Model 高级 | `ModelWorkflowTest`（`model()`/`validate()` helper、hidden/append、scope、事件、readonly） |
+| Model 高级 API | `AdvancedApiTest`（Paginator URL 辅助：appends/fragment/getUrlRange/getCurrentPage/getCurrentPath/render；Model::has / hasWhere / together） |
 | 验证器 | `ModelValidationTest`（Model 内嵌规则 + 失败回滚） |
 | 软删 | `SoftDeleteTest` |
 | 关联 | `RelationHasOneTest`、`RelationHasManyTest`、`RelationBelongsToTest`、`RelationBelongsToManyTest`、`RelationHasManyThroughTest`、`RelationMorphTest` |

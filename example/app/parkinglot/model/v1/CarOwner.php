@@ -21,7 +21,8 @@ class CarOwner extends BModel
     protected $createTime = 'add_time';
     protected $updateTime = null;
     protected $dateFormat = false;
-/**
+
+    /**
      * 一键预加载全部关联
      */
     public function useWithFull()

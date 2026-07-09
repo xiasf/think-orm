@@ -35,7 +35,8 @@ class Notice extends BModel
 
     // 场景（必须 public，否则 Model::__set 会写入 data 而非属性）
     public $scene = 'add';
-/**
+
+    /**
      * status_text 虚拟字段
      */
     public function getStatusTextAttr($value, $data)

@@ -51,10 +51,75 @@ require __DIR__ . '/vendor/autoload.php';
 
 ### 2. 创建模型（默认解析到 `app\<module>\model\<Name>`）
 
-最常见的方式是写一个继承 `think\Model` 的子类：
+> **⚠️ 强烈建议：yf 项目直接继承 `app\common\BaseModel`，不要继承 `think\Model`**
+>
+> BaseModel 在 `think\Model` 之上封装了 yf 业务高频方法（`add / adds / upd / upds / updBy / updAttr / del / info / infoBy / lists / listBy / listByIds / listPageBy / search / search_or / countBy / maxBy / minBy / avgBy / sumBy / valueBy / inc / dec / upSert / resultSet / resultListSet`），统一了 CRUD 入口、自动时间戳、错误处理、验证场景、字段格式化等约定。
+>
+> **直接继承 `think\Model` 是反模式**：会丢掉 yf 项目的统一调用风格、错误转异常、validatorName 推断等关键能力。
+
+#### 推荐做法：继承 `app\common\BaseModel`
 
 ```php
 // 文件: app/model/User.php
+namespace app\model;
+
+use app\common\BaseModel;
+use think\traits\model\SoftDelete;
+
+class User extends BaseModel
+{
+    use SoftDelete;
+
+    protected $table = 'users';
+    protected $deleteTime = 'delete_time';
+    protected $hidden = ['password'];
+    protected $readonly = ['name'];
+
+    // 关联（直接用类常量，IDE 可跳转、PHPStan 可静态分析）
+    public function posts()      { return $this->hasMany(Post::class); }
+    public function profile()    { return $this->hasOne(Profile::class); }
+    public function roles()      { return $this->belongsToMany(Role::class, 'user_roles'); }
+}
+```
+
+业务调用全部走 BaseModel 统一 API：
+
+```php
+$User = model('User');
+
+$User->add(['name' => 'tom', 'email' => 't@x']);       // 创建（带自动时间戳 + 验证场景 add）
+$User->upds([['id' => 1, 'age' => 20], ...]);          // 批量更新
+$User->info(1);                                         // 单条查询
+$User->infoBy(['mobile' => '13800138000']);             // 条件查询单条
+$User->listPageBy(['is_active' => 1], 'id,name', 1, 20); // 分页列表
+$User->countBy(['status' => 1]);                        // 条件计数
+$User->valueBy(['id' => 1], 'name');                    // 单值查询
+$User->inc(['id' => 1], 'hits', 1);                     // 自增
+$User->upSert(['uniq_key' => 'k1', 'val' => 'v1']);     // 不存在则插入，存在则更新
+```
+
+#### BaseModel 的核心能力（详见 `example/app/common/BaseModel.php`）
+
+| 能力 | 说明 |
+|---|---|
+| **统一 CRUD 入口** | `add/adds/upd/upds/updBy/updAttr/del/delBy` 替代散落的 insert/update/delete |
+| **统一查询入口** | `info/infoBy/lists/listBy/listByIds/listPageBy/search/search_or` |
+| **统一聚合** | `countBy/maxBy/minBy/avgBy/sumBy/valueBy` |
+| **统一自增减** | `inc/dec` |
+| **upSert** | 不存在则插入、存在则更新 |
+| **自动时间戳** | `autoWriteTimestamp = 'datetime'` 默认开启 |
+| **字段格式化** | `resultSet` 把 decimal 转 float、JSON 字段自动 decode、append 字段追加 |
+| **验证场景自动推断** | 从命名空间推断 `validatorName()`（如 `app\parkinglot\model\v1\Car` → `parkinglot/Car`） |
+| **错误转异常** | `validateData()` 包了 `set_error_handler`，规则写错抛 `ValidateException` 而非静默 |
+| **trait spd/sca** | 子类实现 `get_Scope()` / `get_withModel()` / `get_ExtendField()` 等 hook |
+
+> **拷贝到自己的项目**：BaseModel 不在 `src/` 里（它是业务层而非框架层）。把 `example/app/common/BaseModel.php` 和 `example/app/common/traits/model/Model.php` 复制到你项目的 `app/common/` 下即可。完整业务参考见 `example/app/parkinglot/`（BModel + 条件关联 + pivot 过滤 + 多层 with）。
+
+#### 仅在简单脚本场景直接继承 `think\Model`
+
+如果你的项目只是想用 ORM，不需要 yf 风格 CRUD：
+
+```php
 namespace app\model;
 
 use think\Model;
@@ -65,25 +130,16 @@ class User extends Model
     use SoftDelete;
 
     protected $table = 'users';
-    protected $autoWriteTimestamp = 'datetime';   // 自动管理 create_time / update_time
-    protected $deleteTime = 'delete_time';        // 软删字段
-    protected $hidden = ['password'];             // 序列化时隐藏
-    protected $readonly = ['name'];               // 只读字段
+    protected $autoWriteTimestamp = 'datetime';
+    protected $deleteTime = 'delete_time';
+    protected $hidden = ['password'];
+    protected $readonly = ['name'];
 
-    // 关联
     public function posts()      { return $this->hasMany(Post::class); }
-    public function profile()    { return $this->hasOne(Profile::class); }
-    public function roles()      { return $this->belongsToMany(Role::class, 'user_roles'); }
-
-    // 读写器
     public function getNameAttr($v) { return ucfirst($v); }
-
-    // 命名范围
     public function scopeActive($q) { return $q->where('is_active', 1); }
 }
 ```
-
-> **yf 项目用户**：可以直接继承本包提供的 `app\common\BaseModel`（位于 `example/app/common/BaseModel.php`，可拷到自己的项目里）。它把 yf 项目的 BaseModel 完整移植过来，提供 `add / adds / upd / updBy / updAttr / del / info / infoBy / lists / listBy / listByIds / listPageBy / search / countBy / maxBy / minBy / avgBy / sumBy / valueBy / inc / dec / upSert` 等 yf 风格方法。完整用法见 **`example/` 目录**（含 Notice/Smartpark 模型与验证器、字段格式化、自动时间戳、JSON 字段、关联、PSR-3 SQL 日志、`run.php` 端到端示例）。
 
 ### 3. 用 `model()` / `validate()` 操作
 
@@ -580,7 +636,8 @@ php example/run_daemon.php
 | 自增自减 | `User::where('id',1)->inc('hits')->update()` |
 | 关联 | `User::with('posts,profile')->select()` |
 | 分页 | `User::where(...)->paginate(15)` |
-| 事务 | `Db::transaction(fn() => ...)` |
+| 事务 | `Db::transaction(fn() => ...)` —— 异常抛出 |
+| 事务（yf 风格 helper） | `transaction(fn() => ..., $errMsg, $errCode, $exception)` —— 异常转引用传出，失败返回 false |
 | 分批 | `User::chunk(100, function($rows){...})` |
 | 软删恢复 | `User::onlyTrashed()->find()->restore()` |
 
@@ -621,7 +678,7 @@ php example/run_daemon.php                   # 生产模式：无限循环（Ctr
 
 `example/run_daemon.php` 演示**守护进程下安全使用 ORM** 的完整模式：队列消费 worker，每 2 秒轮询一批任务、单条事务处理、失败回滚、定期心跳、断线重连。详见下方 [守护进程使用](#守护进程使用) 章节。
 
-**测试覆盖**（431 tests / 841 assertions）：
+**测试覆盖**（435 tests / 855 assertions）：
 
 | 范围 | 测试文件 |
 |---|---|
@@ -631,7 +688,7 @@ php example/run_daemon.php                   # 生产模式：无限循环（Ctr
 | 验证规则 | `ValidateRulesTest`（全部内置规则 + 中文消息） |
 | 集合 | `CollectionTest` |
 | CRUD | `QueryCrudTest`、`InsertAllTest` |
-| 事务 | `TransactionTest`（commit/rollback/嵌套） |
+| 事务 | `TransactionTest`（commit/rollback/嵌套 + yf 风格 `transaction()` helper 4 个场景） |
 | Query Builder | `QueryBuilderTest`（where/join/group/having/order/limit/page/inc/dec） |
 | Query 高级 API | `AdvancedQueryTest`（whereRaw/whereOrRaw/whereExists/whereNotExists/whereExp/whereTime/whereNotNull/whereNotBetween/whereNotLike/useSoftDelete/fetchSql/getPk/getTableFields） |
 | 子查询 | `SubqueryTest` |

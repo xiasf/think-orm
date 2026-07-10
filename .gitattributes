@@ -21,8 +21,8 @@
 
 # 这些目录仅用于本仓库开发，不进入 Packagist 分发包
 # （GitHub 生成 tag zip 时会遵守 export-ignore）
+# 注：example/ 保留在分发包内 —— 是用户参考的核心素材（含 yf 风格 BaseModel、parkinglot 业务模块、daemon 守护进程 demo）
 /tests                  export-ignore
-/example                export-ignore
 /.github                export-ignore
 /runtime                export-ignore
 /coverage               export-ignore

@@ -4,6 +4,31 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-07-09
+
+### Added
+
+- **`transaction()` 助手函数**（src/helper.php）—— yf `application/common.php` 的同名函数原样内置化。业务代码不再需要自己维护；签名与 yf 完全兼容：`transaction(\Closure $callback, &$errMsg, &$errCode, &$exception)`，异常转引用传出，失败返回 `false`，空消息兜底 `'unknown error'`
+- **README "创建模型" 章节重写**：明确把"继承 `app\common\BaseModel`"作为推荐做法，"直接继承 `think\Model`" 标为反模式。新加：
+  - 警告提示框（"yf 项目直接继承 BaseModel，不要继承 think\Model"）
+  - BaseModel 核心 API 用法示例（add/upds/info/listPageBy/countBy/valueBy/inc/upSert）
+  - BaseModel 核心能力表（统一 CRUD/查询/聚合/格式化/验证场景/错误转异常/trait hook）
+  - 拷贝说明（BaseModel 在 `example/app/common/`，业务层不在 src/ 里）
+
+### Fixed
+
+- **发布的包现在包含 `example/` 目录**：之前 `.gitattributes` 和 `composer.json archive.exclude` 都误把 example 排除，用户 `composer require` 后看不到 BaseModel/parkinglot/daemon 等参考素材。现已修复，example/ 与 src/ 一起进入分发包
+
+### Tests
+
+- `TransactionTest` 新增 4 个测试：
+  - `testHelperTransactionSuccess` —— 成功返回闭包结果
+  - `testHelperTransactionFailureReturnsFalseWithErrMsg` —— 异常转引用传出
+  - `testHelperTransactionEmptyMessageFallback` —— 空消息兜底 'unknown error'
+  - `testHelperTransactionErrCodeFromException` —— errCode 取自 getCode()
+
+测试总数：431 → 435 / 断言 841 → 855
+
 ## [1.1.0] - 2026-07-09
 
 响应早期用户反馈完善文档与 API：

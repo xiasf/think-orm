@@ -3,7 +3,7 @@
 // | think-orm  助手函数（精简版）
 // +----------------------------------------------------------------------
 // | 只保留 ORM 相关：exception / config / dump / db / model / validate /
-// | import / trace / load_relation / collection / debug
+// | transaction / import / trace / load_relation / collection / debug
 // | 已剥离：lang / input / widget / controller / action / url / session /
 // |        cookie / cache / request / response / view / json / jsonp / xml /
 // |        redirect / abort / halt / token / load_trait / vendor
@@ -193,5 +193,50 @@ if (!function_exists('collection')) {
             return \think\model\Collection::make($resultSet);
         }
         return \think\Collection::make($resultSet);
+    }
+}
+
+if (!function_exists('transaction')) {
+    /**
+     * 事务包装（yf common.php 兼容语义）
+     *
+     * 用闭包执行一组 DB 操作，自动 commit/rollback。
+     * 异常被捕获后**不抛出**，通过引用参数传出：
+     *   - 失败返回 false（保留 yf 约定）
+     *   - 成功返回闭包的返回值
+     *
+     * 用法：
+     *   $result = transaction(function () {
+     *       Db::name('users')->insert([...]);
+     *       Db::name('logs')->insert([...]);
+     *       return 'ok';
+     *   }, $errMsg, $errCode, $exception);
+     *   if ($result === false) {
+     *       // $errMsg / $errCode / $exception 含错误信息
+     *   }
+     *
+     * @param \Closure   $callback  事务体内执行的闭包
+     * @param string     $errMsg    （引用）错误消息；空消息兜底为 'unknown error'
+     * @param int        $errCode   （引用）错误码（取自异常 getCode）
+     * @param \Throwable $exception （引用）原始异常对象
+     * @return mixed 失败返回 false；成功返回闭包返回值
+     */
+    function transaction(\Closure $callback, &$errMsg = '', &$errCode = 0, &$exception = null)
+    {
+        $result  = false;
+        $errMsg  = '';
+        $errCode = 0;
+        try {
+            $connection = Db::connect();
+            $class      = $connection->getConfig('query');
+            $query      = new $class($connection);
+            $result     = $query->transaction($callback);
+        } catch (\Throwable $e) {
+            $exception = $e;
+            $errMsg    = $e->getMessage();
+            $errMsg    = '' === $errMsg ? 'unknown error' : $errMsg;
+            $errCode   = $e->getCode();
+        }
+        return $result;
     }
 }

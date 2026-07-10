@@ -68,7 +68,6 @@
     "archive": {
         "exclude": [
             "/tests/",
-            "/example/",
             "/.github/",
             "/runtime/",
             "/coverage/",

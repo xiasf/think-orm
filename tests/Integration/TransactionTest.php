@@ -88,4 +88,67 @@ class TransactionTest extends IntegrationTestCase
         }
         $this->assertSame(0, Db::name('users')->count());
     }
+
+    /**
+     * transaction() 助手函数（yf common.php 兼容语义）
+     * 成功：返回闭包结果，errMsg 空字符串，errCode 0
+     */
+    public function testHelperTransactionSuccess()
+    {
+        $result = transaction(function () {
+            Db::name('users')->insert(['name' => 'h1', 'email' => 'h1@x', 'age' => 1]);
+            Db::name('users')->insert(['name' => 'h2', 'email' => 'h2@x', 'age' => 2]);
+            return 'helper-result';
+        }, $errMsg, $errCode, $exception);
+
+        $this->assertSame('helper-result', $result);
+        $this->assertSame('', $errMsg);
+        $this->assertSame(0, $errCode);
+        $this->assertNull($exception);
+        $this->assertSame(2, Db::name('users')->count());
+    }
+
+    /**
+     * transaction() 助手函数：失败时不抛出，异常消息通过引用传出
+     * 失败返回 false（yf 约定），事务自动回滚
+     */
+    public function testHelperTransactionFailureReturnsFalseWithErrMsg()
+    {
+        $result = transaction(function () {
+            Db::name('users')->insert(['name' => 'will-fail', 'email' => 'f@x', 'age' => 1]);
+            throw new \RuntimeException('business exploded');
+        }, $errMsg, $errCode, $exception);
+
+        $this->assertFalse($result);
+        $this->assertSame('business exploded', $errMsg);
+        $this->assertSame(0, Db::name('users')->count(), '事务应回滚');
+        $this->assertInstanceOf(\Throwable::class, $exception);
+        $this->assertInstanceOf(\RuntimeException::class, $exception);
+    }
+
+    /**
+     * 空异常消息兜底为 'unknown error'
+     */
+    public function testHelperTransactionEmptyMessageFallback()
+    {
+        $result = transaction(function () {
+            throw new \Exception('');   // 空消息
+        }, $errMsg);
+
+        $this->assertFalse($result);
+        $this->assertSame('unknown error', $errMsg);
+    }
+
+    /**
+     * errCode 取自异常 getCode()
+     */
+    public function testHelperTransactionErrCodeFromException()
+    {
+        $result = transaction(function () {
+            throw new \RuntimeException('with code', 5001);
+        }, $errMsg, $errCode);
+
+        $this->assertFalse($result);
+        $this->assertSame(5001, $errCode);
+    }
 }
